@@ -1,0 +1,5 @@
+../Core/Src/navigation_logic.c:21:6:Logic_Update	5
+../Core/Src/navigation_logic.c:54:13:state_follow_line	7
+../Core/Src/navigation_logic.c:102:13:state_lost_line	4
+../Core/Src/navigation_logic.c:132:13:update_direction_state	3
+../Core/Src/navigation_logic.c:143:13:update_last_seen_direction	5

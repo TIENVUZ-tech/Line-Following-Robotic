@@ -36,7 +36,23 @@ extern "C" {
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
+typedef struct {
+    float Kp;
+    float Ki;
+    float Kd;
+    float integral;
+    float previous_error;
+    float max_integral; // For anti-windup
+} PID_Controller;
 
+// State Machine
+typedef enum {
+	STATE_STOP = 0, // The car is stationary
+	STATE_FOLLOW_LINE = 1, // Follow line
+	STATE_TURNING_LEFT = 2, // turn left
+	STATE_TURNING_RIGHT = 3, // turn right
+	STATE_LOST_LINE = 4, // Lost line
+} CarState_t;
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
