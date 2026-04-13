@@ -1,5 +1,5 @@
-../Core/Src/navigation_logic.c:21:6:Logic_Update	8	static
-../Core/Src/navigation_logic.c:54:13:state_follow_line	24	static
-../Core/Src/navigation_logic.c:102:13:state_lost_line	16	static
-../Core/Src/navigation_logic.c:132:13:update_direction_state	16	static
-../Core/Src/navigation_logic.c:143:13:update_last_seen_direction	4	static
+../Core/Src/navigation_logic.c:14:6:Logic_Update	8	static
+../Core/Src/navigation_logic.c:47:13:state_follow_line	24	static
+../Core/Src/navigation_logic.c:95:13:state_lost_line	16	static
+../Core/Src/navigation_logic.c:125:13:update_direction_state	16	static
+../Core/Src/navigation_logic.c:136:13:update_last_seen_direction	4	static

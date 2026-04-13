@@ -23,10 +23,15 @@
 /* USER CODE BEGIN Includes */
 #include <math.h>
 #include "navigation_logic.h"
+#include "pid_logic.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+ADC_HandleTypeDef hadc1;
+DMA_HandleTypeDef hdma_adc1;
+TIM_HandleTypeDef htim2;
+UART_HandleTypeDef huart1;
 
 /* USER CODE END PTD */
 
@@ -42,30 +47,11 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-ADC_HandleTypeDef hadc1;
-DMA_HandleTypeDef hdma_adc1;
-
-TIM_HandleTypeDef htim2;
-
-UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-uint8_t sensor_values[SENSOR_COUNT];
-int weights[5] = {-4, -2, 0, 2, 4}; // Define weights (in mm) for 5 sensors: left to right
 
 // Create an instance of the controller
-PID_Controller line_pid;
-CarState_t g_state;
-
-float derivative = 0;
-
-float dt = 0.005;                   // Time delta (seconds) — adjust to your system
-float d = 10.0;                     // Distance between position readings (in mm)
-
-int base_speed = 50; // Normal driving speed (0-100 range for your TIM2)
-float max_integral = 50.0;
-float current_error = 0;
-int pwmL, pwmR;
+CarState_t g_state = STATE_STOP;
 uint8_t g_running = 0;
 
 /* USER CODE END PV */
@@ -78,100 +64,12 @@ static void MX_ADC1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
-void read_sensors();
-float PID_Compute(PID_Controller *pid);
-void PID_Init(PID_Controller *pid, float Kp, float Ki, float Kd, float max_integral);
-void motor_control(int pwmL, int pwmR);
-float compute_position(void);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void read_sensors() {
-	sensor_values[0] = !HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
-	sensor_values[1] = !HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1);
-	sensor_values[2] = !HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4);
-	sensor_values[3] = !HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_0);
-	sensor_values[4] = !HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_1);
-}
 
-void PID_Init(PID_Controller *pid, float Kp, float Ki, float Kd, float max_integral)
-{
-    pid->Kp = Kp;
-    pid->Ki = Ki;
-    pid->Kd = Kd;
-    pid->integral = 0.0f;
-    pid->previous_error = 0.0f;
-    pid->max_integral = max_integral;
-}
-
-float PID_Compute(PID_Controller *pid)
-{
-	int sum = sensor_values[0] + sensor_values[1] + sensor_values[2] + sensor_values[3] + sensor_values[4];
-
-	if (sum > 0) {
-	        current_error = (float)((sensor_values[0] * -2) + (sensor_values[1] * -1) +
-	                                 (sensor_values[2] * 0)  + (sensor_values[3] * 1) +
-	                                 (sensor_values[4] * 2)) / sum;
-	}
-    // 1. Proportional
-    float P = current_error * pid->Kp;
-
-    // 2. Integral with Anti-Windup
-    pid->integral += current_error;
-
-    if (pid->integral > pid->max_integral) {
-        pid->integral = pid->max_integral;
-    } else if (pid->integral < -pid->max_integral) {
-        pid->integral = -pid->max_integral;
-    }
-
-    // Optional: Reset integral if we cross the center perfectly
-    if (current_error == 0.0f) {
-        pid->integral = 0.0f;
-    }
-
-    float I = pid->integral * pid->Ki;
-
-    // 3. Derivative
-    float derivative = current_error - pid->previous_error;
-    float D = derivative * pid->Kd;
-
-    // 4. Save error for the next loop
-    pid->previous_error = current_error;
-
-    // 5. Return the final turn adjustment
-    return (P + I + D);
-}
-
-void motor_control(int pwmL, int pwmR) {
-	  // 4. Constrain Speeds (0 to 100)
-	 if (pwmL > 100) pwmL = 100;
-	 if (pwmL < 0) pwmL = 0;
-
-	 if (pwmR > 100) pwmR = 100;
-	 if (pwmR < 0) pwmR = 0;
-
-	  // 5. Update Hardware PWM
-	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pwmL);
-	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, pwmR);
-}
-
-float compute_position(void) {
-	int sensor_sum = 0;
-	int weighted_sum = 0;
-
-	for (int i = 0; i < 5; i++) {
-		sensor_sum += sensor_values[i];
-		weighted_sum += sensor_values[i] * weights[i];
-	}
-
-	if (sensor_sum == 0) { // lost line
-		return 0.0f;
-	}
-
-	return (float)weighted_sum / sensor_sum;
-}
 /* USER CODE END 0 */
 
 /**

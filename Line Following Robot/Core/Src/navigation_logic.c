@@ -3,13 +3,6 @@
 // Count the number of consecutive cycles without seeing a line
 static int lost_line_counter = 0;
 
-// Remember the direction car lost the line last time to know which way to turn
-typedef enum {
-	LAST_SEEN_LEFT = -1,
-	LAST_SEEN_CENTER = 0,
-	LAST_SEEN_RIGHT = 1,
-} LastSeenDir_t;
-
 static LastSeenDir_t last_seen_dir = LAST_SEEN_CENTER;
 
 // Static function

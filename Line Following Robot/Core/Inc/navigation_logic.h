@@ -1,21 +1,28 @@
 #ifndef INC_NAVIGATION_LOGIC_H_
 #define INC_NAVIGATION_LOGIC_H_
 
-#include "main.h"
+#include "stm32f4xx.h"
 #include "math.h"
+#include "pid_logic.h"
 
-extern uint8_t sensor_values[5];
-extern PID_Controller line_pid;
+// State Machine
+typedef enum {
+	STATE_STOP = 0, // The car is stationary
+	STATE_FOLLOW_LINE = 1, // Follow line
+	STATE_TURNING_LEFT = 2, // turn left
+	STATE_TURNING_RIGHT = 3, // turn right
+	STATE_LOST_LINE = 4, // Lost line
+} CarState_t;
+
+// Remember the direction car lost the line last time to know which way to turn
+typedef enum {
+	LAST_SEEN_LEFT = -1,
+	LAST_SEEN_CENTER = 0,
+	LAST_SEEN_RIGHT = 1,
+} LastSeenDir_t;
 
 extern uint8_t g_running; // 1 = running, 0 = stopping
 extern CarState_t g_state; // Current state
-
-extern int base_speed;
-extern int pwmL, pwmR;
-
-extern float compute_position(void);
-extern float PID_Compute(PID_Controller *pid);
-extern void motor_control(int pwmL, int pwmR);
 
 // Define speed
 #define SPEED_STRAIGHT 80 // Speed when the car goes straight (|error| < 1)
