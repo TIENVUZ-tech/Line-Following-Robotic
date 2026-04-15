@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch LineFollowingRobot_PC",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "${workspaceFolder}/LineFollowingRobot_PC/bin/Debug/net6.0-windows/LineFollowingRobot_PC.exe",
+      "cwd": "${workspaceFolder}/LineFollowingRobot_PC",
+      "preLaunchTask": "build LineFollowingRobot_PC",
+      "stopAtEntry": false,
+      "console": "internalConsole"
+    }
+  ]
+}

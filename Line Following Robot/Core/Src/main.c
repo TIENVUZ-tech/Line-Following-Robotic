@@ -24,6 +24,7 @@
 #include <math.h>
 #include "navigation_logic.h"
 #include "pid_logic.h"
+#include "telemetry.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -110,10 +111,16 @@ int main(void)
 
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
+  
+  /* Initialize telemetry system */
+  Telemetry_Init(&huart1);
+  
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  static CarState_t last_state = STATE_STOP;
+  
   while (1)
   {
     /* USER CODE END WHILE */
@@ -122,6 +129,12 @@ int main(void)
 	  read_sensors();
 
 	  Logic_Update();
+	  
+	  /* Send state if changed */
+	  if (g_state != last_state) {
+	    last_state = g_state;
+	    Telemetry_SendState(g_state);
+	  }
 
 	  HAL_Delay(10);
   }
