@@ -4,6 +4,7 @@
 #include "stm32f4xx.h"
 #include "math.h"
 #include "pid_logic.h"
+#include "motor_driver.h"
 
 // State Machine
 typedef enum {
