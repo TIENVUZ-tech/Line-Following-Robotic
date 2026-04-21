@@ -42,6 +42,8 @@ extern CarState_t g_state; // Current state
 
 #define LOST_LINE_THRESHOLD 15 // 15 cycles = 150ms
 
+float compute_position(void);
+float PID_Compute(PID_Controller *pid, float error, float dt);
 
 /**
  * @brief: Main function of the module - called every 10ms from main.c

@@ -26,7 +26,7 @@ extern UART_HandleTypeDef huart1;
 
 // Functions
 void read_sensors(void);
-float PID_Compute(PID_Controller *pid);
+float PID_Compute(PID_Controller *pid, float error, float dt);
 void PID_Init(PID_Controller *pid, float Kp, float Ki, float Kd, float max_integral);
 float compute_position(void);
 

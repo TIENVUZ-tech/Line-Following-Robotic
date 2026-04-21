@@ -1,4 +1,11 @@
+<<<<<<< Updated upstream
 ../Core/Src/pid_logic.c:14:6:read_sensors	1
 ../Core/Src/pid_logic.c:22:6:PID_Init	1
 ../Core/Src/pid_logic.c:32:7:PID_Compute	5
 ../Core/Src/pid_logic.c:71:7:compute_position	3
+=======
+../Core/Src/pid_logic.c:11:6:read_sensors	1
+../Core/Src/pid_logic.c:20:6:PID_Init	1
+../Core/Src/pid_logic.c:30:7:compute_position	3
+../Core/Src/pid_logic.c:47:7:PID_Compute	4
+>>>>>>> Stashed changes

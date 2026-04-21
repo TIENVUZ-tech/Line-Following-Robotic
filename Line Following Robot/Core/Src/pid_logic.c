@@ -2,25 +2,22 @@
 
 PID_Controller line_pid;
 uint8_t sensor_values[5];
+
+// Used strictly for the single position calculation
 int weights[5] = {-4, -2, 0, 2, 4};
 int base_speed = 50;
 int pwmL, pwmR;
-float current_error = 0;
-
-float derivative = 0;
-float dt = 0.005;                   // Time delta (seconds) — adjust to your system
-float d = 10.0;
 
 void read_sensors() {
-	sensor_values[0] = !HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
-	sensor_values[1] = !HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1);
-	sensor_values[2] = !HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4);
-	sensor_values[3] = !HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_0);
-	sensor_values[4] = !HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_1);
+    // Pin routing updated for your hardware configuration
+    sensor_values[0] = !HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
+    sensor_values[1] = !HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1);
+    sensor_values[2] = !HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4);
+    sensor_values[3] = !HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_0);
+    sensor_values[4] = !HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_1);
 }
 
-void PID_Init(PID_Controller *pid, float Kp, float Ki, float Kd, float max_integral)
-{
+void PID_Init(PID_Controller *pid, float Kp, float Ki, float Kd, float max_integral) {
     pid->Kp = Kp;
     pid->Ki = Ki;
     pid->Kd = Kd;
@@ -29,20 +26,30 @@ void PID_Init(PID_Controller *pid, float Kp, float Ki, float Kd, float max_integ
     pid->max_integral = max_integral;
 }
 
-float PID_Compute(PID_Controller *pid)
-{
-	int sum = sensor_values[0] + sensor_values[1] + sensor_values[2] + sensor_values[3] + sensor_values[4];
+// Calculate position once (-4.0 to 4.0)
+float compute_position(void) {
+    int sensor_sum = 0;
+    int weighted_sum = 0;
 
-	if (sum > 0) {
-	        current_error = (float)((sensor_values[0] * -2) + (sensor_values[1] * -1) +
-	                                 (sensor_values[2] * 0)  + (sensor_values[3] * 1) +
-	                                 (sensor_values[4] * 2)) / sum;
-	}
+    for (int i = 0; i < 5; i++) {
+        sensor_sum += sensor_values[i];
+        weighted_sum += sensor_values[i] * weights[i];
+    }
+
+    if (sensor_sum == 0) {
+        return 0.0f; // Lost line logic handled in navigation_logic
+    }
+
+    return (float)weighted_sum / sensor_sum;
+}
+
+// Pass the calculated error and actual dt into the computation
+float PID_Compute(PID_Controller *pid, float error, float dt) {
     // 1. Proportional
-    float P = current_error * pid->Kp;
+    float P = error * pid->Kp;
 
-    // 2. Integral with Anti-Windup
-    pid->integral += current_error;
+    // 2. Integral with Anti-Windup and Time Delta
+    pid->integral += (error * dt);
 
     if (pid->integral > pid->max_integral) {
         pid->integral = pid->max_integral;
@@ -50,23 +57,22 @@ float PID_Compute(PID_Controller *pid)
         pid->integral = -pid->max_integral;
     }
 
-    // Optional: Reset integral if we cross the center perfectly
-    if (current_error == 0.0f) {
+    if (error == 0.0f) {
         pid->integral = 0.0f;
     }
 
     float I = pid->integral * pid->Ki;
 
-    // 3. Derivative
-    float derivative = current_error - pid->previous_error;
+    // 3. Derivative with Time Delta
+    float derivative = (error - pid->previous_error) / dt;
     float D = derivative * pid->Kd;
 
     // 4. Save error for the next loop
-    pid->previous_error = current_error;
+    pid->previous_error = error;
 
-    // 5. Return the final turn adjustment
     return (P + I + D);
 }
+<<<<<<< Updated upstream
 
 float compute_position(void) {
 	int sensor_sum = 0;
@@ -85,3 +91,5 @@ float compute_position(void) {
 }
 
 
+=======
+>>>>>>> Stashed changes
