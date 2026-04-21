@@ -31,7 +31,7 @@ Core/Src/navigation_logic.o: ../Core/Src/navigation_logic.c \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
- ../Core/Inc/pid_logic.h
+ ../Core/Inc/pid_logic.h ../Core/Inc/motor_driver.h
 ../Core/Inc/navigation_logic.h:
 ../Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f4xx.h:
 ../Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f401xe.h:
@@ -65,3 +65,4 @@ Core/Src/navigation_logic.o: ../Core/Src/navigation_logic.c \
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:
 ../Core/Inc/pid_logic.h:
+../Core/Inc/motor_driver.h:

@@ -68,19 +68,6 @@ float PID_Compute(PID_Controller *pid)
     return (P + I + D);
 }
 
-void motor_control(int pwmL, int pwmR) {
-	  // 4. Constrain Speeds (0 to 100)
-	 if (pwmL > 100) pwmL = 100;
-	 if (pwmL < 0) pwmL = 0;
-
-	 if (pwmR > 100) pwmR = 100;
-	 if (pwmR < 0) pwmR = 0;
-
-	  // 5. Update Hardware PWM
-	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pwmL);
-	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, pwmR);
-}
-
 float compute_position(void) {
 	int sensor_sum = 0;
 	int weighted_sum = 0;

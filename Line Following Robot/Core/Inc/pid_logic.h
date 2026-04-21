@@ -28,7 +28,6 @@ extern UART_HandleTypeDef huart1;
 void read_sensors(void);
 float PID_Compute(PID_Controller *pid);
 void PID_Init(PID_Controller *pid, float Kp, float Ki, float Kd, float max_integral);
-void motor_control(int pwmL, int pwmR);
 float compute_position(void);
 
 #endif /* INC_PID_LOGIC_H_ */
