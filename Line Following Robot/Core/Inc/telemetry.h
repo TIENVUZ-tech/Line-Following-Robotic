@@ -5,18 +5,13 @@
 #include "navigation_logic.h"
 #include "encoder.h"
 
-<<<<<<< Updated upstream
-/* Constants */
-#define UART_RX_BUFFER_SIZE 1
-=======
 /* Telemetry Buffer constants */
 #define TELEMETRY_QUEUE_LENGTH 10
-#define UART_RX_BUFFER_SIZE 32
->>>>>>> Stashed changes
+#define UART_RX_BUFFER_SIZE 1
 
 /* Bare-metal Ring Buffer struct */
 typedef struct {
-    CarState_t buffer[TELEMETRY_QUEUE_LENGTH];
+    RobotState buffer[TELEMETRY_QUEUE_LENGTH];
     uint8_t head;
     uint8_t tail;
     volatile uint8_t count;
@@ -24,7 +19,7 @@ typedef struct {
 
 /* Function prototypes */
 void Telemetry_Init(UART_HandleTypeDef *huart);
-void Telemetry_SendState(CarState_t state);
+void Telemetry_SendState(RobotState state);
 void Telemetry_SendPosition(void);
 void Telemetry_Process(void);
 

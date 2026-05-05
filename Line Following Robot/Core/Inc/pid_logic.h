@@ -1,25 +1,15 @@
-/*
- * PID_Logic.h
- *
- *  Created on: May 2, 2026
- *      Author: DELL
- */
-
 #ifndef INC_PID_LOGIC_H_
 #define INC_PID_LOGIC_H_
+
+#include "stm32f4xx_hal.h"
 
 typedef struct {
     float Kp;
     float Ki;
     float Kd;
-
-    float out_min;
-    float out_max;
-
-    float dt;
-
     float integral;
-    float prev_error;
+    float previous_error;
+    float max_integral; // For anti-windup
 } PID_Controller;
 
 extern PID_Controller line_pid;
@@ -28,7 +18,6 @@ extern int base_speed;
 extern int pwmL, pwmR;
 extern float current_error;
 
-extern ADC_HandleTypeDef hadc1;
 extern DMA_HandleTypeDef hdma_adc1;
 extern TIM_HandleTypeDef htim2;
 extern UART_HandleTypeDef huart1;
@@ -39,5 +28,18 @@ void read_sensors(void);
 float PID_Compute(PID_Controller *pid, float error, float dt);
 void PID_Init(PID_Controller *pid, float Kp, float Ki, float Kd, float max_integral);
 float compute_position(void);
+
+extern float current_error;
+
+extern TIM_HandleTypeDef htim2;
+extern UART_HandleTypeDef huart1;
+
+
+// Functions
+void read_sensors(void);
+float PID_Compute(PID_Controller *pid, float error, float dt);
+void PID_Init(PID_Controller *pid, float Kp, float Ki, float Kd, float max_integral);
+float compute_position(void);
+void PID_Reset(PID_Controller *pid);
 
 #endif /* INC_PID_LOGIC_H_ */

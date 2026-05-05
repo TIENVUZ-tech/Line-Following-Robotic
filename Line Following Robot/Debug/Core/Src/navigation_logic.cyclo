@@ -1,5 +1,6 @@
-../Core/Src/navigation_logic.c:18:6:Logic_Update	5
-../Core/Src/navigation_logic.c:50:13:state_follow_line	7
-../Core/Src/navigation_logic.c:101:13:state_lost_line	4
-../Core/Src/navigation_logic.c:131:13:update_direction_state	3
-../Core/Src/navigation_logic.c:142:13:update_last_seen_direction	5
+../Core/Src/navigation_logic.c:23:6:read_ir_sensors	1
+../Core/Src/navigation_logic.c:31:13:Calculate_Line_Error	4
+../Core/Src/navigation_logic.c:53:6:LineFollower_Init	1
+../Core/Src/navigation_logic.c:60:6:LineFollower_SetState	5
+../Core/Src/navigation_logic.c:83:12:LineFollower_GetState	1
+../Core/Src/navigation_logic.c:87:6:LineFollower_Update	11

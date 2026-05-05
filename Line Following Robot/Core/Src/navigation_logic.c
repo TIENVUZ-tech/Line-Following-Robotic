@@ -51,7 +51,7 @@ static bool Calculate_Line_Error(float *out_error) {
 
 
 void LineFollower_Init(void) {
-    PID_Init(&steering_pid, 85.0f, 10.0f, 10.0f, -BASE_SPEED, BASE_SPEED, 0.01f);
+    PID_Init(&steering_pid, 85.0f, 10.0f, 10.0f, BASE_SPEED);
     Motor_Init();
     current_state = STATE_IDLE;
     motor_control(0, 0);
