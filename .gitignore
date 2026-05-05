@@ -13,6 +13,7 @@
 *.cache
 *.log
 
+
 # STM32CubeIDE / Eclipse generated files
 *.elf
 *.hex
@@ -36,3 +37,9 @@ tuan3_telemetry_instructions.md
 /Line Following Robot/Debug
 /Line Following Robot/Debug
 /Line Following Robot/Debug/Core
+/Line Following Robot/Debug
+/Line Following Robot/Debug
+/Line Following Robot/Debug
+/Line Following Robot/Debug
+*.mk
+/Line Following Robot/Debug

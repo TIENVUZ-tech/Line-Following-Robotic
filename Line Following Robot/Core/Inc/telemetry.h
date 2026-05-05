@@ -5,9 +5,14 @@
 #include "navigation_logic.h"
 #include "encoder.h"
 
+<<<<<<< Updated upstream
+/* Constants */
+#define UART_RX_BUFFER_SIZE 1
+=======
 /* Telemetry Buffer constants */
 #define TELEMETRY_QUEUE_LENGTH 10
-#define UART_RX_BUFFER_SIZE 1
+#define UART_RX_BUFFER_SIZE 32
+>>>>>>> Stashed changes
 
 /* Bare-metal Ring Buffer struct */
 typedef struct {
