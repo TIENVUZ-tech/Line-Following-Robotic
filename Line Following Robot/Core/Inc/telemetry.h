@@ -4,14 +4,14 @@
 #include "stm32f4xx_hal.h"
 #include "navigation_logic.h"
 
-<<<<<<< Updated upstream
+
 /* Constants */
 #define UART_RX_BUFFER_SIZE 1
-=======
+
 /* Telemetry Buffer constants */
 #define TELEMETRY_QUEUE_LENGTH 10
 #define UART_RX_BUFFER_SIZE 32
->>>>>>> Stashed changes
+
 
 /* Bare-metal Ring Buffer struct */
 typedef struct {
