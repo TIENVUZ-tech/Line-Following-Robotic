@@ -18,11 +18,6 @@ extern int base_speed;
 extern int pwmL, pwmR;
 extern float current_error;
 
-extern ADC_HandleTypeDef hadc1;
-extern DMA_HandleTypeDef hdma_adc1;
-extern TIM_HandleTypeDef htim2;
-extern UART_HandleTypeDef huart1;
-
 
 // Functions
 void read_sensors(void);

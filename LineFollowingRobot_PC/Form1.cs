@@ -1,367 +1,499 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using System.Windows.Forms;
+using System.Drawing.Drawing2D;
 using System.IO.Ports;
+using System.Text.RegularExpressions;
+using System.Windows.Forms;
 
 namespace LineFollowingRobot_PC
 {
     public partial class Form1 : Form
     {
+        // ─── Serial Port ──────────────────────────────────────────────
         private SerialPort serialPort;
-        private string receivedData = "";
+        private string     receivedBuffer = "";
+
+        // ─── Trạng thái xe ────────────────────────────────────────────
         private CarState currentState = CarState.UNKNOWN;
-        private Dictionary<string, CarState> stateMap;
-        private Queue<DateTime> stateChangeTimestamps;
-        private int stateChangeCount = 0;
+        private int      stateChangeCount = 0;
 
-        public enum CarState
-        {
-            STOP,
-            FOLLOW_LINE,
-            TURN_LEFT,
-            TURN_RIGHT,
-            SEARCH_MAZE,
-            UNKNOWN
-        }
+        // ─── Dữ liệu quãng đường ──────────────────────────────────────
+        private readonly List<PointF> pathPoints = new();   // mm
+        private float  robotX       = 0f;
+        private float  robotY       = 0f;
+        private float  robotHeading = 0f;   // radian
 
+        // ─── Bộ vẽ đường ──────────────────────────────────────────────
+        private Bitmap    pathBitmap;
+        private Graphics  pathGraphics;
+        private const int PATH_PANEL_W = 500;
+        private const int PATH_PANEL_H = 500;
+        private float     mapScale  = 1.0f;   // pixel/mm, tự động
+        private PointF    mapOffset = new(PATH_PANEL_W / 2f, PATH_PANEL_H / 2f);
+
+        // ─── Enum ─────────────────────────────────────────────────────
+        public enum CarState { STOP, FOLLOW_LINE, TURN_LEFT, TURN_RIGHT, LOST_LINE, UNKNOWN }
+
+        // ==============================================================
+        // Khởi tạo
+        // ==============================================================
         public Form1()
         {
             InitializeComponent();
-            InitializeSerialPort();
-            InitializeStateMap();
-            stateChangeTimestamps = new Queue<DateTime>();
+            SetupSerialPort();
+            SetupPathCanvas();
+            SetupUpdateTimer();
         }
 
-        private void InitializeSerialPort()
+        private void SetupSerialPort()
         {
-            serialPort = new SerialPort();
-            serialPort.BaudRate = 115200;
-            serialPort.DataBits = 8;
-            serialPort.StopBits = StopBits.One;
-            serialPort.Parity = Parity.None;
-            serialPort.DataReceived += SerialPort_DataReceived;
-        }
-
-        private void InitializeStateMap()
-        {
-            stateMap = new Dictionary<string, CarState>()
+            serialPort = new SerialPort
             {
-                { "STOP", CarState.STOP },
-                { "FOLLOW_LINE", CarState.FOLLOW_LINE },
-                { "TURN_LEFT", CarState.TURN_LEFT },
-                { "TURN_RIGHT", CarState.TURN_RIGHT },
-                { "SEARCH_MAZE", CarState.SEARCH_MAZE }
+                BaudRate = 115200,
+                DataBits = 8,
+                StopBits = StopBits.One,
+                Parity   = Parity.None,
+                NewLine  = "\r\n"
             };
+            serialPort.DataReceived += OnDataReceived;
         }
 
-        private void SerialPort_DataReceived(object sender, SerialDataReceivedEventArgs e)
+        private void SetupPathCanvas()
+        {
+            pathBitmap   = new Bitmap(PATH_PANEL_W, PATH_PANEL_H);
+            pathGraphics = Graphics.FromImage(pathBitmap);
+            pathGraphics.SmoothingMode = SmoothingMode.AntiAlias;
+            ClearCanvas();
+        }
+
+        private void SetupUpdateTimer()
+        {
+            var timer = new Timer { Interval = 100 };  // 10 Hz UI refresh
+            timer.Tick += (_, _) => UpdateUI();
+            timer.Start();
+        }
+
+        // ==============================================================
+        // Nhận dữ liệu UART
+        // ==============================================================
+        private void OnDataReceived(object sender, SerialDataReceivedEventArgs e)
         {
             try
             {
-                string data = serialPort.ReadExisting();
-                receivedData += data;
+                receivedBuffer += serialPort.ReadExisting();
+                ParseBuffer();
+            }
+            catch { /* bỏ qua lỗi đọc serial */ }
+        }
 
-                // Parse messages in format: $STATE#
-                Regex regex = new Regex(@"\$([A-Z_]+)#");
-                MatchCollection matches = regex.Matches(receivedData);
+        private void ParseBuffer()
+        {
+            // Tìm tất cả frame hoàn chỉnh dạng $...,..#
+            var stateRx = new Regex(@"\$STATE,([A-Z_]+)#");
+            var posRx   = new Regex(@"\$POS,(-?\d+\.?\d*),(-?\d+\.?\d*),(-?\d+\.?\d*)#");
 
-                if (matches.Count > 0)
+            // --- Parse STATE ---
+            foreach (Match m in stateRx.Matches(receivedBuffer))
+            {
+                var newState = m.Groups[1].Value switch
                 {
-                    // Get the last complete message
-                    Match lastMatch = matches[matches.Count - 1];
-                    string stateName = lastMatch.Groups[1].Value;
-
-                    if (stateMap.ContainsKey(stateName))
-                    {
-                        CarState newState = stateMap[stateName];
-                        if (newState != currentState)
-                        {
-                            currentState = newState;
-                            stateChangeCount++;
-                            stateChangeTimestamps.Enqueue(DateTime.Now);
-
-                            // Keep only last 60 state changes (for 1-minute window)
-                            if (stateChangeTimestamps.Count > 60)
-                            {
-                                stateChangeTimestamps.Dequeue();
-                            }
-                        }
-                    }
-
-                    // Clear received data up to the end of the last message
-                    receivedData = receivedData.Substring(receivedData.LastIndexOf('#') + 1);
+                    "STOP"        => CarState.STOP,
+                    "FOLLOW_LINE" => CarState.FOLLOW_LINE,
+                    "TURN_LEFT"   => CarState.TURN_LEFT,
+                    "TURN_RIGHT"  => CarState.TURN_RIGHT,
+                    "LOST_LINE"   => CarState.LOST_LINE,
+                    _             => CarState.UNKNOWN
+                };
+                if (newState != currentState)
+                {
+                    currentState = newState;
+                    stateChangeCount++;
                 }
             }
-            catch (Exception ex)
+
+            // --- Parse POS ---
+            foreach (Match m in posRx.Matches(receivedBuffer))
             {
-                MessageBox.Show("Error reading from serial port: " + ex.Message);
+                if (float.TryParse(m.Groups[1].Value, out float x) &&
+                    float.TryParse(m.Groups[2].Value, out float y) &&
+                    float.TryParse(m.Groups[3].Value, out float h))
+                {
+                    robotX       = x;
+                    robotY       = y;
+                    robotHeading = h;
+                    AddPathPoint(x, y);
+                }
+            }
+
+            // Xóa phần đã parse, giữ lại phần chưa hoàn chỉnh
+            int lastHash = receivedBuffer.LastIndexOf('#');
+            if (lastHash >= 0)
+                receivedBuffer = receivedBuffer[(lastHash + 1)..];
+
+            // Giới hạn buffer tránh tràn bộ nhớ
+            if (receivedBuffer.Length > 512)
+                receivedBuffer = receivedBuffer[^256..];
+        }
+
+        // ==============================================================
+        // Vẽ đường đi
+        // ==============================================================
+        private void AddPathPoint(float xMm, float yMm)
+        {
+            lock (pathPoints)
+            {
+                pathPoints.Add(new PointF(xMm, yMm));
+
+                // Giới hạn số điểm lưu (bộ nhớ)
+                if (pathPoints.Count > 5000)
+                    pathPoints.RemoveAt(0);
             }
         }
 
+        private void RedrawPath()
+        {
+            lock (pathPoints)
+            {
+                ClearCanvas();
+                if (pathPoints.Count < 2) return;
+
+                // Tính scale tự động để vừa khung
+                AutoScale();
+
+                // Vẽ lưới
+                DrawGrid();
+
+                // Vẽ đường đi
+                using var pathPen = new Pen(Color.DodgerBlue, 2f);
+                for (int i = 1; i < pathPoints.Count; i++)
+                {
+                    var p0 = WorldToScreen(pathPoints[i - 1]);
+                    var p1 = WorldToScreen(pathPoints[i]);
+                    pathGraphics.DrawLine(pathPen, p0, p1);
+                }
+
+                // Vẽ điểm xuất phát (màu xanh lá)
+                var start = WorldToScreen(pathPoints[0]);
+                pathGraphics.FillEllipse(Brushes.LimeGreen, start.X - 6, start.Y - 6, 12, 12);
+                pathGraphics.DrawEllipse(Pens.DarkGreen,    start.X - 6, start.Y - 6, 12, 12);
+
+                // Vẽ vị trí hiện tại (màu đỏ + mũi tên hướng)
+                var curr = WorldToScreen(pathPoints[^1]);
+                pathGraphics.FillEllipse(Brushes.OrangeRed, curr.X - 7, curr.Y - 7, 14, 14);
+                DrawHeadingArrow(curr, robotHeading);
+            }
+
+            // Yêu cầu vẽ lại PictureBox trên UI thread
+            if (pictureBoxPath.InvokeRequired)
+                pictureBoxPath.Invoke(() => pictureBoxPath.Invalidate());
+            else
+                pictureBoxPath.Invalidate();
+        }
+
+        private void AutoScale()
+        {
+            if (pathPoints.Count == 0) return;
+
+            float minX = float.MaxValue, maxX = float.MinValue;
+            float minY = float.MaxValue, maxY = float.MinValue;
+            foreach (var p in pathPoints)
+            {
+                if (p.X < minX) minX = p.X;
+                if (p.X > maxX) maxX = p.X;
+                if (p.Y < minY) minY = p.Y;
+                if (p.Y > maxY) maxY = p.Y;
+            }
+
+            float rangeX = maxX - minX + 200;  // +200mm padding
+            float rangeY = maxY - minY + 200;
+            float scaleX = (PATH_PANEL_W - 40) / rangeX;
+            float scaleY = (PATH_PANEL_H - 40) / rangeY;
+            mapScale = Math.Min(scaleX, scaleY);
+            if (mapScale < 0.1f) mapScale = 0.1f;
+
+            // Tâm bản đồ ở giữa vùng vẽ
+            float centerX = (minX + maxX) / 2f;
+            float centerY = (minY + maxY) / 2f;
+            mapOffset = new PointF(
+                PATH_PANEL_W / 2f - centerX * mapScale,
+                PATH_PANEL_H / 2f + centerY * mapScale   // Y lật vì screen Y đi xuống
+            );
+        }
+
+        private PointF WorldToScreen(PointF world)
+        {
+            // Hệ tọa độ robot: X = phải, Y = lên
+            // Hệ tọa độ màn hình: X = phải, Y = xuống → lật Y
+            return new PointF(
+                world.X *  mapScale + mapOffset.X,
+                world.Y * -mapScale + mapOffset.Y
+            );
+        }
+
+        private void DrawGrid()
+        {
+            using var gridPen = new Pen(Color.FromArgb(40, 0, 0, 0), 1f);
+            gridPen.DashStyle = DashStyle.Dot;
+
+            // Vẽ lưới mỗi 100mm (thực tế)
+            float gridMm   = 100f;
+            float gridPx   = gridMm * mapScale;
+            if (gridPx < 20) gridPx = 20;  // tối thiểu 20px
+
+            for (float x = mapOffset.X % gridPx; x < PATH_PANEL_W; x += gridPx)
+                pathGraphics.DrawLine(gridPen, x, 0, x, PATH_PANEL_H);
+            for (float y = mapOffset.Y % gridPx; y < PATH_PANEL_H; y += gridPx)
+                pathGraphics.DrawLine(gridPen, 0, y, PATH_PANEL_W, y);
+
+            // Trục gốc (x=0, y=0) in đậm hơn
+            var origin = WorldToScreen(new PointF(0, 0));
+            pathGraphics.DrawLine(Pens.Gray, origin.X, 0, origin.X, PATH_PANEL_H);
+            pathGraphics.DrawLine(Pens.Gray, 0, origin.Y, PATH_PANEL_W, origin.Y);
+        }
+
+        private void DrawHeadingArrow(PointF pos, float headingRad)
+        {
+            float len = 20f;
+            float dx  =  MathF.Cos(headingRad) * len;
+            float dy  = -MathF.Sin(headingRad) * len;   // lật Y
+            using var arrowPen = new Pen(Color.Red, 2f)
+            {
+                EndCap = LineCap.ArrowAnchor
+            };
+            pathGraphics.DrawLine(arrowPen, pos.X, pos.Y, pos.X + dx, pos.Y + dy);
+        }
+
+        private void ClearCanvas()
+        {
+            pathGraphics.Clear(Color.WhiteSmoke);
+        }
+
+        // ==============================================================
+        // Cập nhật UI (timer 100ms)
+        // ==============================================================
         private void UpdateUI()
         {
-            if (InvokeRequired)
+            if (InvokeRequired) { Invoke(UpdateUI); return; }
+
+            // Trạng thái
+            (labelStatus.Text, labelStatus.ForeColor) = currentState switch
             {
-                Invoke(new Action(UpdateUI));
-                return;
-            }
-
-            // Update status label
-            string statusText = GetStatusText(currentState);
-            labelStatus.Text = "Trạng thái: " + statusText;
-            labelStatus.ForeColor = GetStatusColor(currentState);
-
-            // Update state change counter
-            labelStateCount.Text = "Thay đổi trạng thái: " + stateChangeCount.ToString();
-        }
-
-        private string GetStatusText(CarState state)
-        {
-            return state switch
-            {
-                CarState.STOP => "Dừng lại",
-                CarState.FOLLOW_LINE => "Đang đi thẳng theo line",
-                CarState.TURN_LEFT => "Đang rẽ trái",
-                CarState.TURN_RIGHT => "Đang rẽ phải",
-                CarState.SEARCH_MAZE => "Đang tìm đường trong mê cung",
-                _ => "Không xác định"
+                CarState.STOP        => ("● Dừng lại",              Color.Red),
+                CarState.FOLLOW_LINE => ("▶ Đang đi thẳng",         Color.Green),
+                CarState.TURN_LEFT   => ("◀ Đang rẽ trái",          Color.DarkOrange),
+                CarState.TURN_RIGHT  => ("▶ Đang rẽ phải",          Color.DarkOrange),
+                CarState.LOST_LINE   => ("? Mất line — đang tìm",   Color.DodgerBlue),
+                _                   => ("— Chưa kết nối",           Color.Gray),
             };
+
+            // Tọa độ
+            labelCoord.Text = $"X={robotX:F0} mm   Y={robotY:F0} mm   θ={robotHeading * 180f / MathF.PI:F1}°";
+
+            labelStateCount.Text = $"Số lần đổi trạng thái: {stateChangeCount}";
+
+            // Vẽ lại bản đồ
+            RedrawPath();
         }
 
-        private Color GetStatusColor(CarState state)
-        {
-            return state switch
-            {
-                CarState.STOP => Color.Red,
-                CarState.FOLLOW_LINE => Color.Green,
-                CarState.TURN_LEFT => Color.Orange,
-                CarState.TURN_RIGHT => Color.Orange,
-                CarState.SEARCH_MAZE => Color.Blue,
-                _ => Color.Black
-            };
-        }
-
+        // ==============================================================
+        // Sự kiện nút bấm
+        // ==============================================================
         private void buttonConnect_Click(object sender, EventArgs e)
         {
             if (serialPort.IsOpen)
             {
                 serialPort.Close();
-                buttonConnect.Text = "Kết nối";
-                buttonStart.Enabled = false;
-                buttonStop.Enabled = false;
-                labelStatus.Text = "Trạng thái: Chưa kết nối";
-                labelStatus.ForeColor = Color.Black;
+                buttonConnect.Text   = "Kết nối";
+                buttonStart.Enabled  = false;
+                buttonStop.Enabled   = false;
+                buttonReset.Enabled  = false;
+                comboBoxPort.Enabled = true;
             }
             else
             {
+                string port = comboBoxPort.SelectedItem?.ToString();
+                if (string.IsNullOrEmpty(port)) { MessageBox.Show("Chọn cổng COM trước!"); return; }
                 try
                 {
-                    string portName = comboBoxPort.SelectedItem?.ToString();
-                    if (string.IsNullOrEmpty(portName))
-                    {
-                        MessageBox.Show("Vui lòng chọn cổng COM");
-                        return;
-                    }
-
-                    serialPort.PortName = portName;
+                    serialPort.PortName = port;
                     serialPort.Open();
-                    buttonConnect.Text = "Ngắt kết nối";
-                    buttonStart.Enabled = true;
-                    buttonStop.Enabled = true;
-                    labelStatus.Text = "Trạng thái: Đã kết nối";
-                    labelStatus.ForeColor = Color.DarkGreen;
+                    buttonConnect.Text   = "Ngắt kết nối";
+                    buttonStart.Enabled  = true;
+                    buttonStop.Enabled   = true;
+                    buttonReset.Enabled  = true;
                     comboBoxPort.Enabled = false;
                 }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("Lỗi kết nối: " + ex.Message);
-                }
+                catch (Exception ex) { MessageBox.Show("Lỗi kết nối: " + ex.Message); }
             }
         }
 
         private void buttonStart_Click(object sender, EventArgs e)
         {
-            if (serialPort.IsOpen)
-            {
-                try
-                {
-                    serialPort.Write("G");
-                    labelCommand.Text = "Lệnh gửi: START (G)";
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("Lỗi gửi lệnh: " + ex.Message);
-                }
-            }
+            if (serialPort.IsOpen) serialPort.Write("G");
         }
 
         private void buttonStop_Click(object sender, EventArgs e)
         {
-            if (serialPort.IsOpen)
-            {
-                try
-                {
-                    serialPort.Write("S");
-                    labelCommand.Text = "Lệnh gửi: STOP (S)";
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("Lỗi gửi lệnh: " + ex.Message);
-                }
-            }
+            if (serialPort.IsOpen) serialPort.Write("S");
         }
 
+        private void buttonReset_Click(object sender, EventArgs e)
+        {
+            // Gửi lệnh reset tọa độ xuống xe
+            if (serialPort.IsOpen) serialPort.Write("R");
+
+            // Xóa đường vẽ trên PC
+            lock (pathPoints) pathPoints.Clear();
+            robotX = robotY = robotHeading = 0f;
+            ClearCanvas();
+            pictureBoxPath.Invalidate();
+        }
+
+        private void buttonSavePath_Click(object sender, EventArgs e)
+        {
+            using var dlg = new SaveFileDialog
+            {
+                Filter   = "PNG Image|*.png",
+                FileName = $"path_{DateTime.Now:yyyyMMdd_HHmmss}.png"
+            };
+            if (dlg.ShowDialog() == DialogResult.OK)
+                pathBitmap.Save(dlg.FileName);
+        }
+
+        // ==============================================================
+        // PictureBox Paint — hiển thị bitmap đã vẽ
+        // ==============================================================
+        private void pictureBoxPath_Paint(object sender, PaintEventArgs e)
+        {
+            e.Graphics.DrawImage(pathBitmap, 0, 0);
+
+            // Vẽ chú thích
+            e.Graphics.DrawString("● Xuất phát", new Font("Segoe UI", 8), Brushes.DarkGreen, 5, 5);
+            e.Graphics.DrawString("● Vị trí hiện tại", new Font("Segoe UI", 8), Brushes.OrangeRed, 5, 20);
+        }
+
+        // ==============================================================
+        // Form Load & Close
+        // ==============================================================
         private void Form1_Load(object sender, EventArgs e)
         {
-            // Populate COM ports
-            string[] ports = SerialPort.GetPortNames();
+            var ports = SerialPort.GetPortNames();
             comboBoxPort.Items.AddRange(ports);
-            if (ports.Length > 0)
-            {
-                comboBoxPort.SelectedIndex = 0;
-            }
-
-            // Timer for UI updates
-            Timer updateTimer = new Timer();
-            updateTimer.Interval = 200; // Update every 200ms
-            updateTimer.Tick += (s, e) => UpdateUI();
-            updateTimer.Start();
+            if (ports.Length > 0) comboBoxPort.SelectedIndex = 0;
 
             buttonStart.Enabled = false;
-            buttonStop.Enabled = false;
-            labelStatus.Text = "Trạng thái: Chưa kết nối";
+            buttonStop.Enabled  = false;
+            buttonReset.Enabled = false;
         }
 
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
-            if (serialPort.IsOpen)
-            {
-                serialPort.Close();
-            }
+            if (serialPort.IsOpen) serialPort.Close();
             serialPort.Dispose();
+            pathGraphics.Dispose();
+            pathBitmap.Dispose();
         }
 
+        // ==============================================================
+        // InitializeComponent — định nghĩa layout
+        // ==============================================================
         private void InitializeComponent()
         {
-            this.comboBoxPort = new System.Windows.Forms.ComboBox();
-            this.buttonConnect = new System.Windows.Forms.Button();
-            this.buttonStart = new System.Windows.Forms.Button();
-            this.buttonStop = new System.Windows.Forms.Button();
-            this.labelStatus = new System.Windows.Forms.Label();
-            this.labelCommand = new System.Windows.Forms.Label();
-            this.labelStateCount = new System.Windows.Forms.Label();
-            this.labelPortSelect = new System.Windows.Forms.Label();
+            this.comboBoxPort     = new ComboBox();
+            this.buttonConnect    = new Button();
+            this.buttonStart      = new Button();
+            this.buttonStop       = new Button();
+            this.buttonReset      = new Button();
+            this.buttonSavePath   = new Button();
+            this.labelStatus      = new Label();
+            this.labelCoord       = new Label();
+            this.labelStateCount  = new Label();
+            this.labelPortSelect  = new Label();
+            this.pictureBoxPath   = new PictureBox();
 
             this.SuspendLayout();
 
-            // comboBoxPort
-            this.comboBoxPort.Location = new System.Drawing.Point(12, 30);
-            this.comboBoxPort.Name = "comboBoxPort";
-            this.comboBoxPort.Size = new System.Drawing.Size(150, 23);
-            this.comboBoxPort.TabIndex = 0;
+            // ── Cột trái: điều khiển (chiều rộng 260px) ──────────────
 
-            // buttonConnect
-            this.buttonConnect.Location = new System.Drawing.Point(168, 30);
-            this.buttonConnect.Name = "buttonConnect";
-            this.buttonConnect.Size = new System.Drawing.Size(100, 23);
-            this.buttonConnect.TabIndex = 1;
-            this.buttonConnect.Text = "Kết nối";
-            this.buttonConnect.UseVisualStyleBackColor = true;
-            this.buttonConnect.Click += new System.EventHandler(this.buttonConnect_Click);
-
-            // labelPortSelect
-            this.labelPortSelect.AutoSize = true;
-            this.labelPortSelect.Location = new System.Drawing.Point(12, 12);
-            this.labelPortSelect.Name = "labelPortSelect";
-            this.labelPortSelect.Size = new System.Drawing.Size(75, 15);
-            this.labelPortSelect.TabIndex = 2;
+            this.labelPortSelect.SetBounds(10, 10, 120, 18);
             this.labelPortSelect.Text = "Chọn cổng COM:";
 
-            // labelStatus
-            this.labelStatus.AutoSize = true;
-            this.labelStatus.Font = new System.Drawing.Font("Segoe UI", 14F, System.Drawing.FontStyle.Bold);
-            this.labelStatus.Location = new System.Drawing.Point(12, 80);
-            this.labelStatus.Name = "labelStatus";
-            this.labelStatus.Size = new System.Drawing.Size(200, 32);
-            this.labelStatus.TabIndex = 3;
-            this.labelStatus.Text = "Trạng thái: Chưa kết nối";
+            this.comboBoxPort.SetBounds(10, 30, 150, 23);
 
-            // buttonStart
-            this.buttonStart.BackColor = System.Drawing.Color.LimeGreen;
-            this.buttonStart.Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Bold);
-            this.buttonStart.Location = new System.Drawing.Point(12, 150);
-            this.buttonStart.Name = "buttonStart";
-            this.buttonStart.Size = new System.Drawing.Size(120, 50);
-            this.buttonStart.TabIndex = 4;
-            this.buttonStart.Text = "START (G)";
-            this.buttonStart.UseVisualStyleBackColor = false;
-            this.buttonStart.Click += new System.EventHandler(this.buttonStart_Click);
+            this.buttonConnect.SetBounds(165, 30, 85, 23);
+            this.buttonConnect.Text   = "Kết nối";
+            this.buttonConnect.Click += buttonConnect_Click;
 
-            // buttonStop
-            this.buttonStop.BackColor = System.Drawing.Color.Red;
-            this.buttonStop.Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Bold);
-            this.buttonStop.ForeColor = System.Drawing.Color.White;
-            this.buttonStop.Location = new System.Drawing.Point(148, 150);
-            this.buttonStop.Name = "buttonStop";
-            this.buttonStop.Size = new System.Drawing.Size(120, 50);
-            this.buttonStop.TabIndex = 5;
-            this.buttonStop.Text = "STOP (S)";
-            this.buttonStop.UseVisualStyleBackColor = false;
-            this.buttonStop.Click += new System.EventHandler(this.buttonStop_Click);
+            this.labelStatus.SetBounds(10, 70, 240, 28);
+            this.labelStatus.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
+            this.labelStatus.Text = "— Chưa kết nối";
+            this.labelStatus.AutoSize = false;
 
-            // labelCommand
-            this.labelCommand.AutoSize = true;
-            this.labelCommand.Location = new System.Drawing.Point(12, 220);
-            this.labelCommand.Name = "labelCommand";
-            this.labelCommand.Size = new System.Drawing.Size(100, 15);
-            this.labelCommand.TabIndex = 6;
-            this.labelCommand.Text = "Lệnh đã gửi:";
+            this.labelCoord.SetBounds(10, 105, 240, 18);
+            this.labelCoord.Text      = "X=0 mm   Y=0 mm   θ=0.0°";
+            this.labelCoord.ForeColor = Color.Navy;
 
-            // labelStateCount
-            this.labelStateCount.AutoSize = true;
-            this.labelStateCount.Location = new System.Drawing.Point(12, 250);
-            this.labelStateCount.Name = "labelStateCount";
-            this.labelStateCount.Size = new System.Drawing.Size(100, 15);
-            this.labelStateCount.TabIndex = 7;
-            this.labelStateCount.Text = "Thay đổi trạng thái: 0";
+            // Nút START
+            this.buttonStart.SetBounds(10, 140, 110, 44);
+            this.buttonStart.Text      = "▶ START";
+            this.buttonStart.BackColor = Color.LimeGreen;
+            this.buttonStart.Font      = new Font("Segoe UI", 11f, FontStyle.Bold);
+            this.buttonStart.Click    += buttonStart_Click;
 
-            // Form1
-            this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(280, 280);
-            this.Controls.Add(this.labelStateCount);
-            this.Controls.Add(this.labelCommand);
-            this.Controls.Add(this.buttonStop);
-            this.Controls.Add(this.buttonStart);
-            this.Controls.Add(this.labelStatus);
-            this.Controls.Add(this.labelPortSelect);
-            this.Controls.Add(this.buttonConnect);
-            this.Controls.Add(this.comboBoxPort);
-            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
-            this.MaximizeBox = false;
-            this.MinimizeBox = true;
-            this.Name = "Form1";
-            this.Text = "Line Following Robot PC Telemetry";
-            this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Form1_FormClosing);
-            this.Load += new System.EventHandler(this.Form1_Load);
+            // Nút STOP
+            this.buttonStop.SetBounds(130, 140, 110, 44);
+            this.buttonStop.Text      = "■ STOP";
+            this.buttonStop.BackColor = Color.OrangeRed;
+            this.buttonStop.ForeColor = Color.White;
+            this.buttonStop.Font      = new Font("Segoe UI", 11f, FontStyle.Bold);
+            this.buttonStop.Click    += buttonStop_Click;
+
+            // Nút RESET tọa độ
+            this.buttonReset.SetBounds(10, 200, 110, 30);
+            this.buttonReset.Text      = "↺ Reset đường";
+            this.buttonReset.BackColor = Color.DodgerBlue;
+            this.buttonReset.ForeColor = Color.White;
+            this.buttonReset.Click    += buttonReset_Click;
+
+            // Nút Lưu ảnh
+            this.buttonSavePath.SetBounds(130, 200, 110, 30);
+            this.buttonSavePath.Text   = "💾 Lưu ảnh";
+            this.buttonSavePath.Click += buttonSavePath_Click;
+
+            this.labelStateCount.SetBounds(10, 250, 240, 18);
+            this.labelStateCount.Text = "Số lần đổi trạng thái: 0";
+
+            // ── Cột phải: bản đồ đường đi ────────────────────────────
+            this.pictureBoxPath.SetBounds(260, 5, PATH_PANEL_W, PATH_PANEL_H);
+            this.pictureBoxPath.BorderStyle = BorderStyle.FixedSingle;
+            this.pictureBoxPath.BackColor   = Color.WhiteSmoke;
+            this.pictureBoxPath.Paint      += pictureBoxPath_Paint;
+
+            // ── Form ──────────────────────────────────────────────────
+            this.ClientSize = new Size(PATH_PANEL_W + 270, PATH_PANEL_H + 10);
+            this.Text       = "Line Following Robot — Path Visualizer";
+            this.FormBorderStyle = FormBorderStyle.FixedSingle;
+            this.MaximizeBox    = false;
+
+            this.Controls.AddRange(new Control[] {
+                labelPortSelect, comboBoxPort, buttonConnect,
+                labelStatus, labelCoord,
+                buttonStart, buttonStop, buttonReset, buttonSavePath,
+                labelStateCount, pictureBoxPath
+            });
+
+            this.Load         += Form1_Load;
+            this.FormClosing  += Form1_FormClosing;
             this.ResumeLayout(false);
-            this.PerformLayout();
         }
 
-        private System.Windows.Forms.ComboBox comboBoxPort;
-        private System.Windows.Forms.Button buttonConnect;
-        private System.Windows.Forms.Button buttonStart;
-        private System.Windows.Forms.Button buttonStop;
-        private System.Windows.Forms.Label labelStatus;
-        private System.Windows.Forms.Label labelCommand;
-        private System.Windows.Forms.Label labelStateCount;
-        private System.Windows.Forms.Label labelPortSelect;
+        // ─── Khai báo controls ────────────────────────────────────────
+        private ComboBox   comboBoxPort;
+        private Button     buttonConnect, buttonStart, buttonStop,
+                           buttonReset, buttonSavePath;
+        private Label      labelStatus, labelCoord,
+                           labelStateCount, labelPortSelect;
+        private PictureBox pictureBoxPath;
     }
 }

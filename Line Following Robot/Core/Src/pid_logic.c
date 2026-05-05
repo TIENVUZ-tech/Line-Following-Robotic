@@ -72,24 +72,3 @@ float PID_Compute(PID_Controller *pid, float error, float dt) {
 
     return (P + I + D);
 }
-<<<<<<< Updated upstream
-
-float compute_position(void) {
-	int sensor_sum = 0;
-	int weighted_sum = 0;
-
-	for (int i = 0; i < 5; i++) {
-		sensor_sum += sensor_values[i];
-		weighted_sum += sensor_values[i] * weights[i];
-	}
-
-	if (sensor_sum == 0) { // lost line
-		return 0.0f;
-	}
-
-	return (float)weighted_sum / sensor_sum;
-}
-
-
-=======
->>>>>>> Stashed changes
