@@ -1,10 +1,3 @@
-/*
- * encoder.h
- *
- *  Created on: May 5, 2026
- *      Author: MY-PC
- */
-
 #ifndef INC_ENCODER_H_
 #define INC_ENCODER_H_
 
@@ -22,6 +15,8 @@ typedef struct {
 	float y; // y coordinate
 	float heading; // direction corner
 } Odometry_t;
+
+extern volatile Odometry_t g_odom;
 
 void Encoder_Init(void);
 void Encoder_Update(void);

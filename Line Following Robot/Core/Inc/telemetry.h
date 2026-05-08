@@ -2,28 +2,19 @@
 #define INC_TELEMETRY_H_
 
 #include "stm32f4xx_hal.h"
-#include "navigation_logic.h"
 #include "encoder.h"
 
-/* Telemetry Buffer constants */
-#define TELEMETRY_QUEUE_LENGTH 10
-#define UART_RX_BUFFER_SIZE 1
-
-/* Bare-metal Ring Buffer struct */
 typedef struct {
-    RobotState buffer[TELEMETRY_QUEUE_LENGTH];
-    uint8_t head;
-    uint8_t tail;
-    volatile uint8_t count;
-} TelemetryBuffer_t;
+    UART_HandleTypeDef *huart;
+    GPIO_TypeDef *en_port;
+    uint16_t en_pin;
+} HC05_HandleTypeDef;
 
-/* Function prototypes */
-void Telemetry_Init(UART_HandleTypeDef *huart);
-void Telemetry_SendState(RobotState state);
-void Telemetry_SendPosition(void);
-void Telemetry_Process(void);
+void HC05_Init(HC05_HandleTypeDef *hc05, UART_HandleTypeDef *huart,
+               GPIO_TypeDef *en_port, uint16_t en_pin);
 
-/* External variables */
-extern uint8_t uart_rx_buffer[UART_RX_BUFFER_SIZE];
+void HC05_SendString(HC05_HandleTypeDef *hc05, const char *str);
+void HC05_SendChar(HC05_HandleTypeDef *hc05, char c);
+void HC05_SendOdometry(HC05_HandleTypeDef *hc05, const volatile Odometry_t *odom);
 
 #endif /* INC_TELEMETRY_H_ */

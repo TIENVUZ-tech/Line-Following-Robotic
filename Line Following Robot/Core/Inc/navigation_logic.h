@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "encoder.h"
 
 typedef enum {
     STATE_IDLE,

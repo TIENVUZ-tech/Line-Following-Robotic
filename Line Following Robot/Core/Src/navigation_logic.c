@@ -1,6 +1,7 @@
 #include "Navigation_logic.h"
 #include "PID_Logic.h"
 #include "motor_driver.h"
+#include "encoder.h"
 
 #define NUM_SENSORS 5
 
@@ -9,7 +10,7 @@
 #define MIN_PWM 0
 #define BASE_SPEED 450
 
-extern uint8_t g_running;
+extern volatile uint8_t g_running;
 
 static RobotState current_state = STATE_IDLE;
 static PID_Controller steering_pid;
@@ -51,8 +52,9 @@ static bool Calculate_Line_Error(float *out_error) {
 
 
 void LineFollower_Init(void) {
-    PID_Init(&steering_pid, 85.0f, 10.0f, 10.0f, BASE_SPEED);
+    PID_Init(&steering_pid, 85.0f, 10.0f, 10.0f, -BASE_SPEED, BASE_SPEED, 0.01f);
     Motor_Init();
+    Encoder_Init();
     current_state = STATE_IDLE;
     motor_control(0, 0);
 }
@@ -72,6 +74,7 @@ void LineFollower_SetState(RobotState new_state) {
 
         case STATE_FOLLOWING:
             PID_Reset(&steering_pid);
+            Encoder_Reset();
             break;
 
         case STATE_LOST:
@@ -88,6 +91,8 @@ void LineFollower_Update(void) {
 	if (g_running == 0 && current_state != STATE_IDLE && current_state != STATE_STOPPED) {
 	            LineFollower_SetState(STATE_IDLE);
 	}
+
+    Encoder_Update();
 
     float current_error = 0.0f;
     bool line_detected = Calculate_Line_Error(&current_error);

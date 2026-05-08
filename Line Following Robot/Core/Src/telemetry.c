@@ -2,130 +2,43 @@
 #include <string.h>
 #include <stdio.h>
 
-/* Global variables */
-static TelemetryBuffer_t telemetry_buf;
-static UART_HandleTypeDef *g_huart = NULL;
+void HC05_Init(HC05_HandleTypeDef *hc05, UART_HandleTypeDef *huart,
+               GPIO_TypeDef *en_port, uint16_t en_pin) {
 
-uint8_t uart_rx_buffer[UART_RX_BUFFER_SIZE];
+    hc05->huart = huart;
+    hc05->en_port = en_port;
+    hc05->en_pin = en_pin;
 
-/* Extern declarations to access variables from main.c and motor_driver.c */
-extern uint8_t g_running;
-extern RobotState g_state;
-extern volatile Odometry_t g_odom;
-extern void motor_control(int pwmL, int pwmR);
-extern void Encoder_Reset(void);
-
-/**
- * @brief Initialize telemetry system - setup ring buffer
- */
-void Telemetry_Init(UART_HandleTypeDef *huart)
-{
-    g_huart = huart;
-
-    // Initialize ring buffer
-    telemetry_buf.head = 0;
-    telemetry_buf.tail = 0;
-    telemetry_buf.count = 0;
-    
-    /* Enable UART receive interrupt for 1 byte */
-    HAL_UART_Receive_IT(g_huart, uart_rx_buffer, 1);
-}
-
-/**
- * @brief Send current state to telemetry buffer (Interrupt safe)
- */
-void Telemetry_SendState(RobotState state)
-{
-    /* Disable interrupts to safely write to buffer */
-    __disable_irq();
-    
-    if (telemetry_buf.count < TELEMETRY_QUEUE_LENGTH) {
-        telemetry_buf.buffer[telemetry_buf.head] = state;
-        telemetry_buf.head = (telemetry_buf.head + 1) % TELEMETRY_QUEUE_LENGTH;
-        telemetry_buf.count++;
-    }
-    
-    /* Re-enable interrupts */
-    __enable_irq();
-}
-
-void Telemetry_SendPosition(void) {
-	if (g_huart == NULL)  return;
-	if (g_huart->gState != HAL_UART_STATE_READY) return;
-
-	static uint8_t pos_buf[64];
-	int len = snprintf((char *)pos_buf, sizeof(pos_buf), "$POS,%.1f,%.1f,%.3f#\r\n", g_odom.x, g_odom.y, g_odom.heading);
-
-	if (len >0 && len < (int)sizeof(pos_buf)) {
-		HAL_UART_Transmit(g_huart, pos_buf, (uint16_t)len, 30);
-	}
-}
-
-/**
- * @brief Process telemetry buffer - Call this in main while(1) loop
- */
-void Telemetry_Process(void)
-{
-	if (g_huart == NULL || g_huart->gState != HAL_UART_STATE_READY || telemetry_buf.count == 0) return;
-
-	// Get 1 element from buffer
-	__disable_irq();
-	RobotState state = telemetry_buf.buffer[telemetry_buf.tail];
-	telemetry_buf.tail = (telemetry_buf.tail + 1) % TELEMETRY_QUEUE_LENGTH;
-	telemetry_buf.count--;
-	__enable_irq();
-
-	// Packet and send
-	static uint8_t tx_buf[32];
-	const char *name;
-	switch(state) {
-		case STATE_IDLE:
-			name = "IDLE";
-			break;
-		case STATE_STOPPED:
-			name = "STOP";
-			break;
-		case STATE_FOLLOWING:
-			name = "FOLLOW_LINE";
-			break;
-		case STATE_LOST:
-			name = "LOST_LINE";
-			break;
-		default:
-			name = "UNKNOWN";
-			break;
-	}
-	
-	int len = snprintf((char*)tx_buf, sizeof(tx_buf), "$STATE,%s#\r\n", name);
-	if (len > 0) {
-		HAL_UART_Transmit(g_huart, tx_buf, (uint16_t)len, 30);
-	}
-}
-
-/**
- * @brief HAL UART Receive Complete Callback
- */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-    if (huart->Instance != USART1) return;
-
-    uint8_t cmd = uart_rx_buffer[0];
-
-    switch (cmd) {
-    	case 'G': case 'g':
-    		g_running = 1;
-    		break;
-    	case 'S': case 's':
-    		g_running = 0;
-    		break;
-    	case 'R': case 'r':
-    		// Reset position odometry to (0, 0, 0)
-    		Encoder_Reset();
-    		break;
-    	default:
-    		break;
+    if (hc05->en_port != NULL) {
+        HAL_GPIO_WritePin(hc05->en_port, hc05->en_pin, GPIO_PIN_RESET);
     }
 
-    // Reactivate receive interrupt for the next byte
-    HAL_UART_Receive_IT(huart, uart_rx_buffer, 1);
+    HC05_SendString(hc05, "Connected!\r\n");
+}
+
+void HC05_SendString(HC05_HandleTypeDef *hc05, const char *str) {
+    HAL_UART_Transmit(hc05->huart, (uint8_t*)str, strlen(str), HAL_MAX_DELAY);
+}
+
+void HC05_SendChar(HC05_HandleTypeDef *hc05, char c) {
+    HAL_UART_Transmit(hc05->huart, (uint8_t*)&c, 1, HAL_MAX_DELAY);
+}
+
+void HC05_SendOdometry(HC05_HandleTypeDef *hc05, const volatile Odometry_t *odom) {
+    char buf[48];
+    /* Convert mm → m with 3 decimal places (1 mm resolution).
+       Use absolute value + sign string so "-0.050 m" prints correctly
+       (integer division of -50/1000 = 0, losing the sign without this). */
+    int32_t  x_mm = (int32_t)odom->x;
+    int32_t  y_mm = (int32_t)odom->y;
+    int32_t  hmr  = (int32_t)(odom->heading * 1000.0f);
+
+    uint32_t x_abs = (uint32_t)(x_mm < 0 ? -x_mm : x_mm);
+    uint32_t y_abs = (uint32_t)(y_mm < 0 ? -y_mm : y_mm);
+
+    int len = snprintf(buf, sizeof(buf), "X:%s%lu.%03lu Y:%s%lu.%03lu H:%ld\r\n",
+                       (x_mm < 0 ? "-" : ""), (unsigned long)(x_abs / 1000), (unsigned long)(x_abs % 1000),
+                       (y_mm < 0 ? "-" : ""), (unsigned long)(y_abs / 1000), (unsigned long)(y_abs % 1000),
+                       (long)hmr);
+    HAL_UART_Transmit(hc05->huart, (uint8_t*)buf, (uint16_t)len, HAL_MAX_DELAY);
 }
