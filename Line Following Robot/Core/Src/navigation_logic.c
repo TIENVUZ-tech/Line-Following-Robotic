@@ -8,7 +8,7 @@
 // Motor PWM limits (Assuming 8-bit timer: 0 to 255)
 #define MAX_PWM 1000
 #define MIN_PWM 0
-#define BASE_SPEED 450
+#define BASE_SPEED 550  // Increased from 450 for faster movement
 
 extern volatile uint8_t g_running;
 
@@ -52,7 +52,7 @@ static bool Calculate_Line_Error(float *out_error) {
 
 
 void LineFollower_Init(void) {
-    PID_Init(&steering_pid, 85.0f, 10.0f, 10.0f, -BASE_SPEED, BASE_SPEED, 0.01f);
+    PID_Init(&steering_pid, 100.0f, 10.0f, 10.0f, -BASE_SPEED, BASE_SPEED, 0.01f);  // Kp increased from 85.0
     Motor_Init();
     Encoder_Init();
     current_state = STATE_IDLE;

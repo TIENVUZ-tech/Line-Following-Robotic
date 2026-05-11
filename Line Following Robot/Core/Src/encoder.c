@@ -35,13 +35,17 @@ void Encoder_Update(void) {
 	float d = (dL + dR) * 0.5f;
 	float dTheta = (dR - dL) / WHEEL_BASE_MM;
 
+	// Use average heading for accurate position calculation
+	// This prevents accumulated heading drift from affecting position
+	float avg_heading = g_odom.heading + dTheta * 0.5f;
+	
+	g_odom.x += d * cosf(avg_heading);
+	g_odom.y += d * sinf(avg_heading);
+
 	g_odom.heading += dTheta;
 
 	if (g_odom.heading > (float)M_PI) g_odom.heading -= 2.0f * (float)M_PI;
 	if (g_odom.heading < -(float)M_PI) g_odom.heading += 2.0f * (float)M_PI;
-
-	g_odom.x += d * cosf(g_odom.heading);
-	g_odom.y += d * sinf(g_odom.heading);
 }
 
 void Encoder_Reset(void) {

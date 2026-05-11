@@ -1,6 +1,6 @@
-../Core/Src/navigation_logic.c:23:6:read_ir_sensors	1
-../Core/Src/navigation_logic.c:31:13:Calculate_Line_Error	4
-../Core/Src/navigation_logic.c:53:6:LineFollower_Init	1
-../Core/Src/navigation_logic.c:60:6:LineFollower_SetState	5
-../Core/Src/navigation_logic.c:83:12:LineFollower_GetState	1
-../Core/Src/navigation_logic.c:87:6:LineFollower_Update	11
+../Core/Src/navigation_logic.c:24:6:read_ir_sensors	1
+../Core/Src/navigation_logic.c:32:13:Calculate_Line_Error	4
+../Core/Src/navigation_logic.c:54:6:LineFollower_Init	1
+../Core/Src/navigation_logic.c:62:6:LineFollower_SetState	5
+../Core/Src/navigation_logic.c:86:12:LineFollower_GetState	1
+../Core/Src/navigation_logic.c:90:6:LineFollower_Update	11

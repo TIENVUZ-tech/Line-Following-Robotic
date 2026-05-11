@@ -1,5 +1,5 @@
 Core/Src/navigation_logic.o: ../Core/Src/navigation_logic.c \
- ../Core/Inc/Navigation_logic.h ../Core/Inc/PID_Logic.h \
+ ../Core/Inc/Navigation_logic.h ../Core/Inc/encoder.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h \
  ../Core/Inc/stm32f4xx_hal_conf.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_rcc.h \
@@ -28,9 +28,9 @@ Core/Src/navigation_logic.o: ../Core/Src/navigation_logic.c \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
- ../Core/Inc/motor_driver.h
+ ../Core/Inc/PID_Logic.h ../Core/Inc/motor_driver.h ../Core/Inc/encoder.h
 ../Core/Inc/Navigation_logic.h:
-../Core/Inc/PID_Logic.h:
+../Core/Inc/encoder.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
 ../Core/Inc/stm32f4xx_hal_conf.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_rcc.h:
@@ -59,4 +59,6 @@ Core/Src/navigation_logic.o: ../Core/Src/navigation_logic.c \
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:
+../Core/Inc/PID_Logic.h:
 ../Core/Inc/motor_driver.h:
+../Core/Inc/encoder.h:
